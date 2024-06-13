@@ -22,7 +22,7 @@
       };
 
       buildInputs = builtins.attrValues {
-        inherit (pkgs) clang-tools;
+        inherit (pkgs) clang-tools fmt;
         inherit (pkgs.llvmPackages_latest) libstdcxxClang libcxx;
       };
     in {
