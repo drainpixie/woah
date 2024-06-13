@@ -3,8 +3,8 @@ CXX				= clang++
 CXXFLAGS ?= -fsanitize=address -Wall -Wextra -g
 CXXFLAGS += -std=c++20
 
-CXXFLAGS += `pkg-config --cflags fmt`
-LDFLAGS  += `pkg-config --libs fmt`
+CXXFLAGS += `pkg-config --cflags fmt cxxopts`
+LDFLAGS  += `pkg-config --libs fmt cxxopts`
 
 TARGET	 ?= woah
 SRC				= main.cpp
