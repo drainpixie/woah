@@ -1,65 +1,69 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    hooks.url = "github:cachix/pre-commit-hooks.nix";
     utils.url = "github:numtide/flake-utils";
+
+    rust = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    hooks = {
+      url = "github:cachix/pre-commit-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
-    self,
     nixpkgs,
     hooks,
     utils,
+    rust,
+    self,
     ...
   }:
     utils.lib.eachDefaultSystem (system: let
-      pkgs = import nixpkgs {inherit system;};
-      name = "woah_${system}";
-      src = ./.;
+      overlays = [(import rust)];
+      pkgs = import nixpkgs {inherit system overlays;};
 
-      nativeBuildInputs = builtins.attrValues {
-        inherit (pkgs) gnumake pkg-config;
-      };
-
-      buildInputs = builtins.attrValues {
-        inherit (pkgs) clang-tools fmt cxxopts;
-        inherit (pkgs.llvmPackages_latest) libstdcxxClang libcxx;
-      };
+      toolchain = pkgs.rust-bin.selectLatestNightlyWith (toolchain:
+        toolchain.default.override {
+          extensions = ["rust-src"];
+        });
     in {
-      packages.default = pkgs.stdenv.mkDerivation {
-        inherit src name;
-        inherit nativeBuildInputs buildInputs;
-
-        buildPhase = ''
-          TARGET=${name} make
-        '';
-
-        installPhase = ''
-          mkdir -p $out/bin
-          cp ${name} $out/bin
-        '';
-      };
-
-      checks.pre-commit-check = let
-        lib = hooks.lib.${system};
-      in
-        lib.run {
-          inherit src;
-
-          hooks = {
-            clang-format.enable = true;
-            clang-tidy.enable = true;
-          };
-        };
-
       devShells.default = let
         check = self.checks.${system}.pre-commit-check;
       in
         nixpkgs.legacyPackages.${system}.mkShell {
           inherit (check) shellHook;
-          inherit nativeBuildInputs;
+          buildInputs = check.enabledPackages;
+        };
 
-          buildInputs = buildInputs ++ check.enabledPackages;
+      checks.pre-commit-check = let
+        lib = hooks.lib.${system};
+      in
+        lib.run {
+          src = ./.;
+
+          hooks = {
+            clippy = {
+              enable = true;
+
+              packageOverrides = {
+                clippy = toolchain;
+                cargo = toolchain;
+              };
+            };
+
+            rustfmt = {
+              enable = true;
+
+              packageOverrides = {
+                rustfmt = toolchain;
+                cargo = toolchain;
+              };
+            };
+          };
         };
     });
 }

@@ -1,0 +1,7 @@
+[package]
+name = "woah"
+description = "🧰 nobody ever thought of a good scaffolding solution!?"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
