@@ -100,53 +100,51 @@ fn extract_git(url: &str) -> Result<RepositoryData, String> {
 }
 
 fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
-    match Repository::open(path) {
-        Ok(repo) => {
-            log::info(&name, &format!("updating repository {}", name));
+    let repo = Repository::open(path).map_err(|e| format!("failed to open repository: {}", e))?;
 
-            let mut remote = repo
-                .find_remote("origin")
-                .expect("couldn't find remote 'origin'");
+    log::info(name, &format!("updating repository {}", name));
 
-            remote
-                .fetch(&["main"], None, None)
-                .expect("failed to fetch remote 'origin'");
+    let mut remote = repo
+        .find_remote("origin")
+        .map_err(|e| format!("couldn't find remote 'origin': {}", e))?;
 
-            let fetch_head = repo
-                .find_reference("FETCH_HEAD")
-                .expect("couldn't find FETCH_HEAD");
+    remote
+        .fetch(&["main"], None, None)
+        .map_err(|e| format!("failed to fetch remote 'origin': {}", e))?;
 
-            let fetch_commit = repo
-                .reference_to_annotated_commit(&fetch_head)
-                .expect("couldn't find commit");
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
+        .map_err(|e| format!("couldn't find FETCH_HEAD: {}", e))?;
 
-            let analysis = repo
-                .merge_analysis(&[&fetch_commit])
-                .expect("couldn't find merge analysis");
+    let fetch_commit = repo
+        .reference_to_annotated_commit(&fetch_head)
+        .map_err(|e| format!("couldn't find commit: {}", e))?;
 
-            if analysis.0.is_up_to_date() {
-                log::info(&name, "repository is already up to date");
-            } else if analysis.0.is_fast_forward() {
-                log::info(&name, "repository is fast-forwardable");
+    let analysis = repo
+        .merge_analysis(&[&fetch_commit])
+        .map_err(|e| format!("couldn't find merge analysis: {}", e))?;
 
-                let refname = "refs/heads/main";
-                let mut reference = repo
-                    .find_reference(&refname)
-                    .expect("couldn't find reference");
+    if analysis.0.is_up_to_date() {
+        log::info(name, "repository is already up to date");
+    } else if analysis.0.is_fast_forward() {
+        log::info(name, "repository is fast-forwardable");
 
-                reference
-                    .set_target(fetch_commit.id(), "fast-forward")
-                    .expect("failed to fast-forward repository");
+        let refname = "refs/heads/main";
+        let mut reference = repo
+            .find_reference(&refname)
+            .map_err(|e| format!("couldn't find reference: {}", e))?;
 
-                repo.set_head(&refname).expect("failed to set HEAD to main");
-                repo.checkout_head(Some(CheckoutBuilder::default().force()))
-                    .expect("failed to checkout");
-            }
+        reference
+            .set_target(fetch_commit.id(), "fast-forward")
+            .map_err(|e| format!("failed to fast-forward repository: {}", e))?;
 
-            Ok(())
-        }
-        Err(e) => Err(format!("failed to open repository: {}", e)),
+        repo.set_head(&refname)
+            .map_err(|e| format!("failed to set HEAD to main: {}", e))?;
+        repo.checkout_head(Some(CheckoutBuilder::default().force()))
+            .map_err(|e| format!("failed to checkout: {}", e))?;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
