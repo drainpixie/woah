@@ -61,7 +61,7 @@ pub fn install(repo: &RepositoryData) {
 
     log::info("install", &format!("directory is {}", data_dir.display()));
 
-    match Repository::clone(&repo.url, &data_dir.join(repo.repository.to_string())) {
+    match Repository::clone(&repo.url, data_dir.join(repo.repository.to_string())) {
         Ok(_) => log::success("install", "cloned repository"),
         Err(e) => log::error("install", &format!("failed to clone repository: {}", e)),
     }
@@ -70,19 +70,26 @@ pub fn install(repo: &RepositoryData) {
 pub fn update(name: Option<&String>) {
     let data_dir = PROJECT_DIRS.data_dir();
 
-    match name {
-        Some(name) => {
-            log::info("update", &format!("updating template {}", name));
+    if let Some(name) = name {
+        let path = data_dir.join(name);
 
-            let path = data_dir.join(name.to_string());
-
-            match update_repository(&name, &path) {
-                Ok(_) => log::success("update", "updated repository"),
-                Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
-            }
+        match update_repository(name, &path) {
+            Ok(_) => log::success("update", "updated repository"),
+            Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
         }
-        None => {
-            log::info("update", "updating all templates");
+    } else {
+        for entry in std::fs::read_dir(data_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_dir() {
+                let name = path.file_name().unwrap().to_str().unwrap();
+
+                match update_repository(name, &path) {
+                    Ok(_) => log::success("update", "updated repository"),
+                    Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
+                }
+            }
         }
     }
 }
@@ -131,14 +138,14 @@ fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
 
         let refname = "refs/heads/main";
         let mut reference = repo
-            .find_reference(&refname)
+            .find_reference(refname)
             .map_err(|e| format!("couldn't find reference: {}", e))?;
 
         reference
             .set_target(fetch_commit.id(), "fast-forward")
             .map_err(|e| format!("failed to fast-forward repository: {}", e))?;
 
-        repo.set_head(&refname)
+        repo.set_head(refname)
             .map_err(|e| format!("failed to set HEAD to main: {}", e))?;
         repo.checkout_head(Some(CheckoutBuilder::default().force()))
             .map_err(|e| format!("failed to checkout: {}", e))?;
@@ -154,19 +161,19 @@ mod tests {
     #[test]
     fn test_extract_git() {
         #[rustfmt::skip]
-                let cases = [
-                    ("https://github.com/username/repository.git", RepositoryData::new("https://github.com/username/repository.git", "github.com", "username", "repository")),
-                    ("http://github.com/username/repository", RepositoryData::new("http://github.com/username/repository", "github.com", "username", "repository")),
-                    ("git@github.com:username/repository.git", RepositoryData::new("git@github.com:username/repository.git", "github.com", "username", "repository")),
-                    ("ssh://git@github.com/username/repository", RepositoryData::new("ssh://git@github.com/username/repository", "github.com", "username", "repository")),
-                    ("git://github.com/username/repository", RepositoryData::new("git://github.com/username/repository", "github.com", "username", "repository")),
-                    ("https://bitbucket.org/username/repository.git", RepositoryData::new("https://bitbucket.org/username/repository.git", "bitbucket.org", "username", "repository")),
-                    ("git@gitlab.com:username/repository.git", RepositoryData::new("git@gitlab.com:username/repository.git", "gitlab.com", "username", "repository")),
-                    ("https://example.com/username/repository", RepositoryData::new("https://example.com/username/repository", "example.com", "username", "repository")),
-                    ("git@example.com:username/repository.git", RepositoryData::new("git@example.com:username/repository.git", "example.com", "username", "repository")),
-                    ("ssh://git@example.com/username/repository", RepositoryData::new("ssh://git@example.com/username/repository", "example.com", "username", "repository")),
-                    ("https://github.com/username/repository.git/extra", RepositoryData::new("https://github.com/username/repository.git/extra", "github.com", "username", "repository")),
-                ];
+        let cases = [
+            ("https://github.com/username/repository.git", RepositoryData::new("https://github.com/username/repository.git", "github.com", "username", "repository")),
+            ("http://github.com/username/repository", RepositoryData::new("http://github.com/username/repository", "github.com", "username", "repository")),
+            ("git@github.com:username/repository.git", RepositoryData::new("git@github.com:username/repository.git", "github.com", "username", "repository")),
+            ("ssh://git@github.com/username/repository", RepositoryData::new("ssh://git@github.com/username/repository", "github.com", "username", "repository")),
+            ("git://github.com/username/repository", RepositoryData::new("git://github.com/username/repository", "github.com", "username", "repository")),
+            ("https://bitbucket.org/username/repository.git", RepositoryData::new("https://bitbucket.org/username/repository.git", "bitbucket.org", "username", "repository")),
+            ("git@gitlab.com:username/repository.git", RepositoryData::new("git@gitlab.com:username/repository.git", "gitlab.com", "username", "repository")),
+            ("https://example.com/username/repository", RepositoryData::new("https://example.com/username/repository", "example.com", "username", "repository")),
+            ("git@example.com:username/repository.git", RepositoryData::new("git@example.com:username/repository.git", "example.com", "username", "repository")),
+            ("ssh://git@example.com/username/repository", RepositoryData::new("ssh://git@example.com/username/repository", "example.com", "username", "repository")),
+            ("https://github.com/username/repository.git/extra", RepositoryData::new("https://github.com/username/repository.git/extra", "github.com", "username", "repository")),
+        ];
 
         let icases = ["https://github.com", "ssh://github.com", "git@github.com"];
 
