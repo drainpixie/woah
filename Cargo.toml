@@ -1,10 +1,10 @@
 [package]
 name = "woah"
-description = "🧰 nobody ever thought of a good scaffolding solution!?"
+description = "Nobody ever thought of a good scaffolding solution!?"
 version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-bpaf = "0.9.12"
+clap = { version = "4.5.7", features = ["cargo", "derive", "unicode"] }
 directories = "5.0.1"
 once_cell = "1.19.0"
