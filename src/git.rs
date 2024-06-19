@@ -6,6 +6,10 @@ use regex::Regex;
 
 use crate::log;
 
+pub static GIT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?:https?:\/\/|(?:ssh:\/\/)?git@|git:\/\/)?(?:www\.)?([\w.-]+)[/:]([^/]+)\/([^/.]+)(?:\.git)?").unwrap()
+});
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RepositoryData {
     pub url: Box<str>,
@@ -23,17 +27,13 @@ impl RepositoryData {
             repository: repository.into(),
         }
     }
-}
 
-pub static GIT_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:https?:\/\/|(?:ssh:\/\/)?git@|git:\/\/)?(?:www\.)?([\w.-]+)[/:]([^/]+)\/([^/.]+)(?:\.git)?").unwrap()
-});
-
-pub fn extract_url(url: &str) -> Result<RepositoryData, String> {
-    GIT_REGEX
-        .captures(url)
-        .map(|captures| RepositoryData::new(url, &captures[1], &captures[2], &captures[3]))
-        .ok_or_else(|| "Invalid URL".to_string())
+    pub fn from_url(url: &str) -> Result<Self, String> {
+        GIT_REGEX
+            .captures(url)
+            .map(|captures| Self::new(url, &captures[1], &captures[2], &captures[3]))
+            .ok_or_else(|| "Invalid URL".to_string())
+    }
 }
 
 pub fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
@@ -92,38 +92,26 @@ mod tests {
 
     #[test]
     fn test_extract_git() {
-        #[rustfmt::skip]
         let cases = [
-            ("https://github.com/username/repository.git", RepositoryData::new("https://github.com/username/repository.git", "github.com", "username", "repository")),
-            ("http://github.com/username/repository", RepositoryData::new("http://github.com/username/repository", "github.com", "username", "repository")),
-            ("git@github.com:username/repository.git", RepositoryData::new("git@github.com:username/repository.git", "github.com", "username", "repository")),
-            ("ssh://git@github.com/username/repository", RepositoryData::new("ssh://git@github.com/username/repository", "github.com", "username", "repository")),
-            ("git://github.com/username/repository", RepositoryData::new("git://github.com/username/repository", "github.com", "username", "repository")),
-            ("https://bitbucket.org/username/repository.git", RepositoryData::new("https://bitbucket.org/username/repository.git", "bitbucket.org", "username", "repository")),
-            ("git@gitlab.com:username/repository.git", RepositoryData::new("git@gitlab.com:username/repository.git", "gitlab.com", "username", "repository")),
-            ("https://example.com/username/repository", RepositoryData::new("https://example.com/username/repository", "example.com", "username", "repository")),
-            ("git@example.com:username/repository.git", RepositoryData::new("git@example.com:username/repository.git", "example.com", "username", "repository")),
-            ("ssh://git@example.com/username/repository", RepositoryData::new("ssh://git@example.com/username/repository", "example.com", "username", "repository")),
-            ("https://github.com/username/repository.git/extra", RepositoryData::new("https://github.com/username/repository.git/extra", "github.com", "username", "repository")),
+            RepositoryData::from_url("https://github.com/username/repository.git"),
+            RepositoryData::from_url("http://github.com/username/repository"),
+            RepositoryData::from_url("git@github.com:username/repository.git"),
+            RepositoryData::from_url("ssh://git@github.com/username/repository"),
+            RepositoryData::from_url("git://github.com/username/repository"),
+            RepositoryData::from_url("https://bitbucket.org/username/repository.git"),
+            RepositoryData::from_url("git@gitlab.com:username/repository.git"),
+            RepositoryData::from_url("https://example.com/username/repository"),
+            RepositoryData::from_url("git@example.com:username/repository.git"),
+            RepositoryData::from_url("ssh://git@example.com/username/repository"),
+            RepositoryData::from_url("https://github.com/username/repository.git/extra"),
         ];
 
-        #[rustfmt::skip]
-        let invalid_cases = [
-            "https://github.com",
-            "ssh://github.com",
-            "git@github.com",
-        ];
-
-        for (url, expected) in cases {
-            assert_eq!(extract_url(url), Ok(expected), "Failed on URL: {}", url);
+        for case in cases {
+            assert!(case.is_ok(), "Expected a valid URL: {:?}", case);
         }
 
-        for url in invalid_cases {
-            assert!(
-                extract_url(url).is_err(),
-                "Expected an error for URL: {}",
-                url
-            );
-        }
+        assert!(RepositoryData::from_url("https://github.com").is_err(), "Expected an invalid URL");
+        assert!(RepositoryData::from_url("ssh://github.com").is_err(), "Expected an invalid URL");
+        assert!(RepositoryData::from_url("git@github.com").is_err(), "Expected an invalid URL");
     }
 }

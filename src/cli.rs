@@ -15,7 +15,7 @@ pub fn create_command() -> Command {
         .subcommand(
             command!("install")
                 .about("Install a template")
-                .arg(arg!(<URL>).value_parser(git::extract_url)),
+                .arg(arg!(<URL>).value_parser(RepositoryData::from_url)),
         )
         .subcommand(
             command!("update")
