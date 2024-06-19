@@ -1,7 +1,7 @@
-use std::fs::create_dir;
+use std::path::PathBuf;
 
 use clap::{arg, command, Command};
-use git2::Repository;
+use git2::{build::CheckoutBuilder, Repository};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -39,12 +39,12 @@ pub fn create_command() -> Command {
         .subcommand(
             command!("install")
                 .about("Install a template")
-                .arg(arg!([URL]).value_parser(extract_git)),
+                .arg(arg!(<URL>).value_parser(extract_git)),
         )
         .subcommand(
             command!("update")
                 .about("Update templates")
-                .arg(arg!(<NAME>)),
+                .arg(arg!([NAME])),
         )
 }
 
@@ -67,6 +67,26 @@ pub fn install(repo: &RepositoryData) {
     }
 }
 
+pub fn update(name: Option<&String>) {
+    let data_dir = PROJECT_DIRS.data_dir();
+
+    match name {
+        Some(name) => {
+            log::info("update", &format!("updating template {}", name));
+
+            let path = data_dir.join(name.to_string());
+
+            match update_repository(&name, &path) {
+                Ok(_) => log::success("update", "updated repository"),
+                Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
+            }
+        }
+        None => {
+            log::info("update", "updating all templates");
+        }
+    }
+}
+
 fn extract_git(url: &str) -> Result<RepositoryData, String> {
     match GIT_REGEX.captures(url) {
         Some(captures) => Ok(RepositoryData::new(
@@ -76,6 +96,56 @@ fn extract_git(url: &str) -> Result<RepositoryData, String> {
             &captures[3],
         )),
         None => Err("Invalid URL".to_string()),
+    }
+}
+
+fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
+    match Repository::open(path) {
+        Ok(repo) => {
+            log::info(&name, &format!("updating repository {}", name));
+
+            let mut remote = repo
+                .find_remote("origin")
+                .expect("couldn't find remote 'origin'");
+
+            remote
+                .fetch(&["main"], None, None)
+                .expect("failed to fetch remote 'origin'");
+
+            let fetch_head = repo
+                .find_reference("FETCH_HEAD")
+                .expect("couldn't find FETCH_HEAD");
+
+            let fetch_commit = repo
+                .reference_to_annotated_commit(&fetch_head)
+                .expect("couldn't find commit");
+
+            let analysis = repo
+                .merge_analysis(&[&fetch_commit])
+                .expect("couldn't find merge analysis");
+
+            if analysis.0.is_up_to_date() {
+                log::info(&name, "repository is already up to date");
+            } else if analysis.0.is_fast_forward() {
+                log::info(&name, "repository is fast-forwardable");
+
+                let refname = "refs/heads/main";
+                let mut reference = repo
+                    .find_reference(&refname)
+                    .expect("couldn't find reference");
+
+                reference
+                    .set_target(fetch_commit.id(), "fast-forward")
+                    .expect("failed to fast-forward repository");
+
+                repo.set_head(&refname).expect("failed to set HEAD to main");
+                repo.checkout_head(Some(CheckoutBuilder::default().force()))
+                    .expect("failed to checkout");
+            }
+
+            Ok(())
+        }
+        Err(e) => Err(format!("failed to open repository: {}", e)),
     }
 }
 
