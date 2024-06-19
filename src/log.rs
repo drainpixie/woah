@@ -26,7 +26,7 @@ pub fn log(_type: LogType, ctx: &str, message: &str) {
     };
 
     let prefix = format!("\x1b[1;37;{}m  {}  \x1b[0m", color, prefix_type);
-    let ctx = format!("\x1b[1;37;{}m  {}  \x1b[0m", context_color, ctx);
+    let ctx = format!("\x1b[37;{}m  {}  \x1b[0m", context_color, ctx);
     let message = format!("\x1b[37;{}m   \x1b[0m {}", color, message);
 
     println!("{}{}{}", prefix, ctx, message);
