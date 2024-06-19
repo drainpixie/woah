@@ -69,41 +69,30 @@ pub fn install(repo: &RepositoryData) {
 
 pub fn update(name: Option<&String>) {
     let data_dir = PROJECT_DIRS.data_dir();
+    let failed = |e| log::error("update", &format!("failed to update repository: {}", e));
 
     if let Some(name) = name {
         let path = data_dir.join(name);
-
-        match update_repository(name, &path) {
-            Ok(_) => log::success("update", "updated repository"),
-            Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
-        }
+        update_repository(name, &path).unwrap_or_else(failed);
     } else {
-        for entry in std::fs::read_dir(data_dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-
-            if path.is_dir() {
-                let name = path.file_name().unwrap().to_str().unwrap();
-
-                match update_repository(name, &path) {
-                    Ok(_) => log::success("update", "updated repository"),
-                    Err(e) => log::error("update", &format!("failed to update repository: {}", e)),
+        std::fs::read_dir(data_dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .for_each(|path| {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    update_repository(name, &path).unwrap_or_else(failed)
                 }
-            }
-        }
+            });
     }
 }
 
 fn extract_git(url: &str) -> Result<RepositoryData, String> {
-    match GIT_REGEX.captures(url) {
-        Some(captures) => Ok(RepositoryData::new(
-            url,
-            &captures[1],
-            &captures[2],
-            &captures[3],
-        )),
-        None => Err("Invalid URL".to_string()),
-    }
+    GIT_REGEX
+        .captures(url)
+        .map(|captures| RepositoryData::new(url, &captures[1], &captures[2], &captures[3]))
+        .ok_or_else(|| "Invalid URL".to_string())
 }
 
 fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
@@ -149,6 +138,8 @@ fn update_repository(name: &str, path: &PathBuf) -> Result<(), String> {
             .map_err(|e| format!("failed to set HEAD to main: {}", e))?;
         repo.checkout_head(Some(CheckoutBuilder::default().force()))
             .map_err(|e| format!("failed to checkout: {}", e))?;
+
+        log::success(name, "repository updated successfully");
     }
 
     Ok(())
@@ -175,13 +166,18 @@ mod tests {
             ("https://github.com/username/repository.git/extra", RepositoryData::new("https://github.com/username/repository.git/extra", "github.com", "username", "repository")),
         ];
 
-        let icases = ["https://github.com", "ssh://github.com", "git@github.com"];
+        #[rustfmt::skip]
+        let invalid_cases = [
+            "https://github.com",
+            "ssh://github.com",
+            "git@github.com",
+        ];
 
         for (url, expected) in cases {
             assert_eq!(extract_git(url), Ok(expected), "Failed on URL: {}", url);
         }
 
-        for url in icases {
+        for url in invalid_cases {
             assert!(
                 extract_git(url).is_err(),
                 "Expected an error for URL: {}",
