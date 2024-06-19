@@ -10,7 +10,7 @@ fn main() {
 
     match create_command().get_matches().subcommand() {
         Some(("install", sub)) => cli::install(sub.get_one::<RepositoryData>("URL").unwrap()),
-        Some(("update", sub)) => println!("update {}", sub.get_one::<String>("NAME").unwrap()),
+        Some(("update", sub)) => cli::update(sub.get_one::<String>("NAME")),
         _ => unreachable!(),
     }
 }
