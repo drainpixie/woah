@@ -2,14 +2,14 @@
 // A: I need something extremely simple, and having a logging library that depends
 //    on 7 others and provides 1000 features is extremely overkill for the scope of this project.
 
-pub enum LogType {
+enum LogType {
     Info,
     Warn,
     Error,
     Success,
 }
 
-pub fn log(_type: LogType, ctx: &str, message: &str) {
+fn log(_type: LogType, ctx: &str, message: &str) {
     let context_color = 107;
     let color = match _type {
         LogType::Info => 104,

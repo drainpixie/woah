@@ -1,8 +1,10 @@
-use cli::{create_command, RepositoryData};
+use cli::create_command;
 use config::create_data_directory;
+use git::RepositoryData;
 
 mod cli;
 mod config;
+mod git;
 mod log;
 
 fn main() {
