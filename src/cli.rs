@@ -1,23 +1,12 @@
-use clap::{arg, command, value_parser, Command};
+use clap::{arg, command, Command};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+type Git = (Box<str>, Box<str>, Box<str>);
+
 pub static GIT_REGEX: Lazy<Regex> = Lazy::new(|| {
-    let pattern = r"(?:https:\/\/|http:\/\/|git@|ssh:\/\/git@|git:\/\/)?(?:www\.)?([a-zA-Z0-9.-]+)[/:]([^/]+)\/([^/.]+)(?:\.git)?";
-    Regex::new(pattern).unwrap()
+    Regex::new(r"(?:https?:\/\/|(?:ssh:\/\/)?git@|git:\/\/)?(?:www\.)?([\w.-]+)[/:]([^/]+)\/([^/.]+)(?:\.git)?").unwrap()
 });
-
-fn try_parse_git_url(url: &str) -> Result<(String, String, String), String> {
-    if let Some(captures) = GIT_REGEX.captures(url) {
-        let host = captures.get(1).unwrap().as_str().to_string();
-        let username = captures.get(2).unwrap().as_str().to_string();
-        let repository = captures.get(3).unwrap().as_str().to_string();
-
-        Ok((host, username, repository))
-    } else {
-        Err("Invalid URL".to_string())
-    }
-}
 
 pub fn create_command() -> Command {
     command!()
@@ -27,7 +16,7 @@ pub fn create_command() -> Command {
         .subcommand(
             command!("install")
                 .about("Install a template")
-                .arg(arg!([URL]).value_parser(try_parse_git_url)),
+                .arg(arg!([URL]).value_parser(extract_git)),
         )
         .subcommand(
             command!("update")
@@ -36,46 +25,63 @@ pub fn create_command() -> Command {
         )
 }
 
-pub fn install(url: String) {}
+pub fn install(url: Git) {
+    
+}
+
+// TODO: Find a more proper way to make clap handle string slices
+fn extract_git(url: &str) -> Result<Git, String> {
+    if let Some(captures) = GIT_REGEX.captures(url) {
+        let [host, username, repository] = captures
+            .iter()
+            .skip(1)
+            .map(|x| Box::from(x.unwrap().as_str()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        Ok((host, username, repository))
+    } else {
+        Err("Invalid URL".to_string())
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_git_url() {
+    fn test_extract_git() {
         #[rustfmt::skip]
-        let valid_cases = vec![
-            ("https://github.com/username/repository.git", Ok(("github.com", "username", "repository"))),
-            ("http://github.com/username/repository", Ok(("github.com", "username", "repository"))),
-            ("git@github.com:username/repository.git", Ok(("github.com", "username", "repository"))),
-            ("ssh://git@github.com/username/repository", Ok(("github.com", "username", "repository"))),
-            ("git://github.com/username/repository", Ok(("github.com", "username", "repository"))),
-            ("https://bitbucket.org/username/repository.git", Ok(("bitbucket.org", "username", "repository"))),
-            ("git@gitlab.com:username/repository.git", Ok(("gitlab.com", "username", "repository"))),
-            ("https://example.com/username/repository", Ok(("example.com", "username", "repository"))),
-            ("git@example.com:username/repository.git", Ok(("example.com", "username", "repository"))),
-            ("ssh://git@example.com/username/repository", Ok(("example.com", "username", "repository"))),
-            ("https://github.com/username/repository.git/extra", Ok(("github.com", "username", "repository"))),
+        let cases = vec![
+            ("https://github.com/username/repository.git", ("github.com", "username", "repository")),
+            ("http://github.com/username/repository", ("github.com", "username", "repository")),
+            ("git@github.com:username/repository.git", ("github.com", "username", "repository")),
+            ("ssh://git@github.com/username/repository", ("github.com", "username", "repository")),
+            ("git://github.com/username/repository", ("github.com", "username", "repository")),
+            ("https://bitbucket.org/username/repository.git", ("bitbucket.org", "username", "repository")),
+            ("git@gitlab.com:username/repository.git", ("gitlab.com", "username", "repository")),
+            ("https://example.com/username/repository", ("example.com", "username", "repository")),
+            ("git@example.com:username/repository.git", ("example.com", "username", "repository")),
+            ("ssh://git@example.com/username/repository", ("example.com", "username", "repository")),
+            ("https://github.com/username/repository.git/extra", ("github.com", "username", "repository")),
         ];
 
-        for (url, expected) in valid_cases {
-            let expected = expected.map(|(host, username, repository)| {
-                (
-                    host.to_string(),
-                    username.to_string(),
-                    repository.to_string(),
-                )
-            });
+        #[rustfmt::skip]
+        let icases = [
+            "https://github.com",
+            "ssh://github.com",
+            "git@github.com"
+        ];
 
-            assert_eq!(try_parse_git_url(url), expected, "Failed on URL: {}", url);
+        for (url, (host, username, repository)) in cases {
+            let expected: Git = (host.into(), username.into(), repository.into());
+            assert_eq!(extract_git(url), Ok(expected), "Failed on URL: {}", url);
         }
 
-        let invalid_cases = vec!["https://github.com", "ssh://github.com", "git@github.com"];
-
-        for url in invalid_cases {
+        for url in icases {
             assert_eq!(
-                try_parse_git_url(url),
+                extract_git(url),
                 Err("Invalid URL".to_string()),
                 "Failed on URL: {}",
                 url
