@@ -1,3 +1,7 @@
+use config::ensure_data_dir_exists;
+
+mod config;
+
 fn main() {
-    println!("Hello, world!");
+    ensure_data_dir_exists();
 }
